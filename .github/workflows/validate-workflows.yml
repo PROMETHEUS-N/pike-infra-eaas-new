@@ -15,18 +15,27 @@ jobs:
         uses: actions/checkout@v4
 
       # Bicep is a standalone compiler; validation does not require Azure CLI or Azure login.
+      # The version is pinned so every run validates with the same compiler. To upgrade, change
+      # BICEP_VERSION to another release tag from https://github.com/Azure/bicep/releases.
       - name: Install Bicep CLI
         id: bicep-setup
         continue-on-error: true
         shell: pwsh
+        env:
+          BICEP_VERSION: v0.48.1
         run: |
           $ErrorActionPreference = "Stop"
           $bicep = Join-Path $env:RUNNER_TEMP "bicep.exe"
-          Invoke-WebRequest -Uri "https://github.com/Azure/bicep/releases/latest/download/bicep-win-x64.exe" -OutFile $bicep
-          if (-not (Test-Path -LiteralPath $bicep)) { throw "Bicep CLI download failed." }
-          "BICEP_CLI_PATH=$bicep" | Add-Content $env:GITHUB_ENV
-          & $bicep --version
+          $url = "https://github.com/Azure/bicep/releases/download/$env:BICEP_VERSION/bicep-win-x64.exe"
+          Invoke-WebRequest -Uri $url -OutFile $bicep
+          if (-not (Test-Path -LiteralPath $bicep)) { throw "Bicep CLI $env:BICEP_VERSION download failed." }
+          $version = (& $bicep --version) -join " "
           if ($LASTEXITCODE -ne 0) { throw "Bicep CLI verification failed." }
+          Write-Host $version
+          if ($version -notmatch [regex]::Escape($env:BICEP_VERSION.TrimStart('v'))) {
+            throw "Expected Bicep $env:BICEP_VERSION but got: $version"
+          }
+          "BICEP_CLI_PATH=$bicep" | Add-Content $env:GITHUB_ENV
 
       - name: Build and lint every Bicep file
         id: bicep
@@ -54,7 +63,9 @@ jobs:
               $relativePath = [IO.Path]::GetRelativePath((Get-Location).Path, $file.FullName)
               $outFile = Join-Path $buildDir ("module-{0}.json" -f $index)
               Write-Host "::group::Bicep validation: $relativePath"
-              $output = & $env:BICEP_CLI_PATH build --file $file.FullName --outfile $outFile 2>&1
+              # Standalone Bicep CLI: the input file is positional ("bicep build <file>").
+              # "--file" exists only on the Azure CLI wrapper ("az bicep build --file <file>").
+              $output = & $env:BICEP_CLI_PATH build $file.FullName --outfile $outFile 2>&1
               $exitCode = $LASTEXITCODE
               $diagnostics = @($output | ForEach-Object { "$_".Trim() } | Where-Object { -not [string]::IsNullOrWhiteSpace($_) })
               $matched = 0

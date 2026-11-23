@@ -124,7 +124,7 @@ resource privateDnsVnetLink 'Microsoft.Network/privateDnsZones/virtualNetworkLin
 
 resource postgresqlServer 'Microsoft.DBforPostgreSQL/flexibleServers@2023-06-01-preview' = {
   name: serverName
-  location: 'centralus'
+  location: location
   tags: union(tags, { env: environmentName, workload: workload })
   sku: {
     name: skuName

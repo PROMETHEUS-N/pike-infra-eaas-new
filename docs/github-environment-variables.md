@@ -191,9 +191,9 @@ Per VM type:
 | `VM_WINDOWS_SQL_IMAGE` | `MicrosoftSQLServer:SQL2022-WS2022:sqldev-gen2:latest` | `vmWindowsSql` = yes |
 | `VM_WINDOWS_SQL_SIZE` | `Standard_D2as_v5` | `vmWindowsSql` = yes |
 | `VM_WINDOWS_IMAGE` | Not in the previous input.json — owner to provide | `vmWindows` = yes |
-| `VM_WINDOWS_SIZE` | Not in the previous input.json — owner to provide | `vmWindows` = yes |
+| `VM_WINDOWS_SIZE` | Not set → selected automatically (see section 3a) | `vmWindows` = yes |
 | `VM_LINUX_IMAGE` | Not in the previous input.json — owner to provide | `vmLinux` = yes |
-| `VM_LINUX_SIZE` | Not in the previous input.json — owner to provide | `vmLinux` = yes |
+| `VM_LINUX_SIZE` | Not set → selected automatically (see section 3a) | `vmLinux` = yes |
 
 Every resource now gets the same tags (`RESOURCE_TAGS` plus `env` and `workload`).
 
@@ -212,6 +212,36 @@ Server name: `psql-pike-<target.purpose>-dev`. The module also creates its own d
 | `POSTGRESQL_HA_MODE` | `Disabled` *(previously fixed inside the module)* |
 | `POSTGRESQL_SUBNET_ADDRESS_PREFIX` | `10.40.3.0/28` |
 | `POSTGRESQL_PRIVATE_DNS_ZONE_NAME` | `privatelink.postgres.database.azure.com` |
+
+---
+
+## 3a. SKU selection at deploy time (`auto`)
+
+The `deploy` job runs a **SKU selection** step after the Azure login and before any resource is deployed ([.github/scripts/select-skus.js](../.github/scripts/select-skus.js)). It checks against **the subscription of the selected GitHub Environment** in `input.json` → `target.location`. Its decisions appear in the run summary under *SKU selection*, and the chosen SKU is written to the inventory CSV.
+
+| Variable value | What happens |
+|---|---|
+| empty, not defined, or `auto` | The **lowest-cost SKU available to this subscription in the region** is chosen |
+| an explicit SKU | It is checked. If it is restricted, incompatible or over quota, that entry fails **before deployment** and the error lists the three cheapest available alternatives |
+
+| Variable | `auto` chooses |
+|---|---|
+| `VM_WINDOWS_SIZE`, `VM_LINUX_SIZE`, `VM_WINDOWS_SQL_SIZE` | Cheapest size by pay-as-you-go price (Windows prices for Windows VMs, Linux prices for Linux) that is not restricted, matches the image's generation (Gen1/Gen2) and CPU architecture, meets the minimum vCPU/memory below, and fits the remaining vCPU quota (VMs in the same run are counted) |
+| `VM_DISK_TYPE` | Cheapest disk type offered in the region: `Standard_LRS`, then `StandardSSD_LRS`, then `Premium_LRS` |
+| `VM_OS_DISK_SIZE_GB` | `0` = the image's own disk size (the smallest billing tier the image allows) |
+| `POSTGRESQL_SKU` (and `POSTGRESQL_TIER`) | Lowest tier, then fewest vCores, then least memory: Burstable before GeneralPurpose before MemoryOptimized. Burstable is skipped when `POSTGRESQL_HA_MODE` is not `Disabled`. The tier is set to match the SKU |
+
+PostgreSQL also checks that `POSTGRESQL_VERSION` and `POSTGRESQL_STORAGE_SIZE_GB` are offered in the region.
+
+**Optional minimums for `auto` VM sizes** (defaults shown; set them only to change the floor):
+
+| Variable | Default | Reason for the default |
+|---|---|---|
+| `VM_LINUX_MIN_MEMORY_GB` / `VM_LINUX_MIN_VCPUS` | `0.5` / `1` | Smallest size that runs a minimal Linux server |
+| `VM_WINDOWS_MIN_MEMORY_GB` / `VM_WINDOWS_MIN_VCPUS` | `2` / `1` | Windows Server with Desktop Experience needs 2 GB. Use `1` for a Server Core image |
+| `VM_WINDOWS_SQL_MIN_MEMORY_GB` / `VM_WINDOWS_SQL_MIN_VCPUS` | `4` / `2` | Microsoft's recommended minimum for SQL Server |
+
+**Runner requirements:** VM prices come from the public Azure Retail Prices API (`https://prices.azure.com`), so the self-hosted runner needs outbound HTTPS to it. Without it, `auto` VM entries fail with a clear message, while explicit sizes are still checked for availability. The workflow identity needs read access to the subscription (`Microsoft.Compute/skus/read`, usage and PostgreSQL capabilities), which the *Reader* role covers.
 
 ---
 

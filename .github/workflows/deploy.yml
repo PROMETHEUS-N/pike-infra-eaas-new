@@ -360,12 +360,33 @@ jobs:
           client-id: ${{ secrets.AZURE_CLIENT_ID }}
           tenant-id: ${{ secrets.AZURE_TENANT_ID }}
           subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+      # Checks VM and PostgreSQL SKUs against THIS environment's subscription in the target region.
+      # A size/SKU variable that is empty or "auto" gets the lowest-cost SKU available there; an
+      # explicit value is checked and, if unavailable, that entry fails with cheaper alternatives.
+      # See .github/scripts/select-skus.js. Other entries pass through unchanged.
+      - name: Select available, lowest-cost SKUs in the region
+        id: sku
+        uses: actions/github-script@v7
+        env:
+          PLAN_JSON: ${{ needs.plan.outputs.deploy-plan }}
+          VARS_JSON: ${{ toJSON(vars) }}
+          TARGET_LOCATION: ${{ needs.plan.outputs.location }}
+        with:
+          script: |
+            const selectSkus = require(`${process.env.GITHUB_WORKSPACE}/.github/scripts/select-skus.js`);
+            const plan = await selectSkus({
+              core, exec,
+              plan: JSON.parse(process.env.PLAN_JSON || '[]'),
+              vars: JSON.parse(process.env.VARS_JSON || '{}'),
+              location: process.env.TARGET_LOCATION
+            });
+            core.setOutput('plan', JSON.stringify(plan));
       # Walks the plan in order. Each entry is validated, previewed with What-If and deployed
       # before the next one starts. The OIDC login is refreshed before every entry.
       - id: deploy
         uses: ./.github/actions/deploy-bicep
         with:
-          plan: ${{ needs.plan.outputs.deploy-plan }}
+          plan: ${{ steps.sku.outputs.plan }}
           resource-group: ${{ needs.context.outputs.resource-group }}
           location: ${{ needs.plan.outputs.location }}
           vars-json: ${{ toJSON(vars) }}

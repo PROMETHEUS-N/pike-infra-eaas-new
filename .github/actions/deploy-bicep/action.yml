@@ -178,6 +178,8 @@ runs:
             const result = { key: entry.key || template, status: 'Failed', resourceName: '', resourceId: '', parameters: {}, error: '' };
             let paramFile = '';
             try {
+              // Set by the SKU selection step when no usable SKU exists for this entry.
+              if (entry.preflightError) throw new Error(entry.preflightError);
               if (!template || !fs.existsSync(template)) throw new Error(`Module '${template}' does not exist in the repository.`);
               if (!entry.deploymentName) throw new Error('A deployment name is required.');
               if (scope === 'resourceGroup' && !rg) throw new Error('resource-group is required for a resource group deployment.');

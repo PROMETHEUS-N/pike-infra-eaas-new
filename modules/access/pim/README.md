@@ -1,95 +1,113 @@
-# 🛡️ BIFROST PIM module
+# 🛡️ PIM module — `pim.bicep`
 
-This module contains the Azure Resource PIM eligibility Bicep implementation and the PIM policy configuration parameter file.
+Submits an **Azure resource PIM eligibility request**. It makes a Microsoft Entra **user eligible** for an Azure role at **subscription** scope for a limited time. The user must then *activate* the role (just-in-time) when they need it.
 
-## 📦 Files
-
-| File | Purpose |
+| | |
 |---|---|
-| `pim.bicep` | Subscription-scoped Azure Resource PIM eligibility schedule request. |
-| `pim-policy-settings.bicepparam` | Policy intent for Azure roles, Entra roles, PIM for Groups, and assignment defaults. |
+| **File** | [pim.bicep](pim.bicep) |
+| **Azure resource** | `Microsoft.Authorization/roleEligibilityScheduleRequests@2024-09-01-preview` |
+| **Deployment scope** | **Subscription** (`az deployment sub`) |
+| **`input.json` key** | `accessRequests.pim` → `{ "request": "yes", "requestorEmail": "<user email>" }` |
+| **Name** | A GUID: `guid(subscription().id, principalId, roleDefinitionId, startDateTime)` |
 
-Requester identity/access/ticket data belongs in root `input.json`, not duplicated in the policy parameter file.
+---
 
-## ⚙️ Bicep scope and parameters
+## What is PIM?
 
-```bicep
-targetScope = 'subscription'
-```
+Privileged Identity Management (PIM) controls **privileged access**:
 
-This declares subscription deployment scope, but does not select the subscription ID.
+| | RBAC ([../rbac](../rbac/README.md)) | PIM (this module) |
+|---|---|---|
+| Access type | **Active**: always on | **Eligible**: the user must activate it |
+| Duration | Permanent until removed | Eligibility expires after `duration`; each activation is time-boxed |
+| Approval / MFA / justification | No | Configurable per role, in the PIM role settings |
 
-| Parameter | Description |
-|---|---|
-| `principalId` | Entra Object ID (GUID) of the principal receiving eligibility. |
-| `roleDefinitionId` | Full Azure role definition resource ID. |
-| `requestType` | Azure Resource PIM schedule operation; new eligibility commonly uses `AdminAssign`. |
-| `justification` | Business reason for access. |
-| `duration` | Eligibility duration in ISO 8601 format, validated against finite `@allowed` values. |
-| `startDateTime` | Start time; currently uses the template's UTC time default. |
-| `requestName` | Unique schedule request name. |
+PIM is **not** a managed identity, and it does not replace RBAC. It governs *when* a role assignment becomes active.
 
-The template resource is:
+---
 
-```bicep
-Microsoft.Authorization/roleEligibilityScheduleRequests@2024-09-01-preview
-```
-
-## 🛡️ Policy parameter file
-
-`pim-policy-settings.bicepparam` contains:
-- `azureResourcePimPolicy`: Owner and User Access Administrator settings.
-- `entraRolePimPolicy`: Global Administrator and Exchange Administrator settings.
-- `groupPimPolicy`: Group Owner and Member settings.
-- `pimAssignmentDefaults`: eligibility and assignment defaults.
-
-These objects are **not applied** by the current eligibility resource. Azure Authorization API and Microsoft Graph operations must be implemented separately to enforce those policies.
-
-## 🔁 Current deployment flow
+## How a request flows
 
 ```mermaid
-flowchart LR
-  subgraph Inputs["🧾 Inputs"]
-    JSON[Root input.json]
-    PARAMS[pim-policy-settings.bicepparam]
-  end
-  subgraph Operator["🧑‍💻 Operator / runner"]
-    MAP[Map request fields to required Bicep parameters]
-    SUB[Select target subscription]
-  end
-  subgraph Azure["☁️ Azure"]
-    BICEP[pim.bicep]
-    ELIG[Role eligibility schedule]
-  end
-  JSON --> MAP
-  PARAMS -. policy intent only .-> MAP
-  MAP --> SUB --> BICEP --> ELIG
+flowchart TD
+    IN[/"input.json<br/>accessRequests.pim.request = yes<br/>requestorEmail"/] --> DEP["deploy.yml → access-management"]
+    DEP --> JOB["access.yml → pim job<br/>(runs after the rbac job, never in parallel)"]
+    JOB --> LOGIN["azure/login (OIDC)"]
+    LOGIN --> CHK{"PIM_JUSTIFICATION set?"}
+    CHK -- "no" --> F1["Failed"]
+    CHK -- "yes" --> RES["az ad user show → Entra object ID"]
+    RES --> DEPLOY["deploy-bicep: check requestType / duration<br/>against pim.bicep allowed values → What-If → create"]
+    DEPLOY --> ELIG["Role eligibility schedule<br/>(subscription scope)"]
+    ELIG --> USER(["User activates the role<br/>in the Azure portal when needed"])
 
-  classDef input fill:#E3F2FD,stroke:#1565C0,color:#0D47A1,stroke-width:2px;
-  classDef ops fill:#FFF3E0,stroke:#EF6C00,color:#E65100,stroke-width:2px;
-  classDef cloud fill:#E8F5E9,stroke:#2E7D32,color:#1B5E20,stroke-width:2px;
-  class JSON,PARAMS input;
-  class MAP,SUB ops;
-  class BICEP,ELIG cloud;
+    classDef io fill:#ccfbf1,stroke:#0f766e,color:#134e4a
+    classDef step fill:#dbeafe,stroke:#2563eb,color:#172554
+    classDef bad fill:#ffe4e6,stroke:#e11d48,color:#881337
+    class IN io
+    class DEP,JOB,LOGIN,RES,DEPLOY,ELIG step
+    class F1 bad
 ```
 
-## 🧪 Local validation
+---
 
-```powershell
-az login
-az account set --subscription <SUBSCRIPTION_ID>
-az account show
-az bicep build --file modules/pim/pim.bicep
+## Dependencies
+
+| Needs | Notes |
+|---|---|
+| Subscription (GitHub Environment) | Scope of the eligibility |
+| Entra **user** in `requestorEmail` | Resolved with `az ad user show`; only users are supported |
+| Workflow identity permissions | Must be allowed to create role eligibility schedule requests at subscription scope (e.g. *User Access Administrator* / *Owner*), plus Microsoft Graph user read |
+| Microsoft Entra ID P2 (or Governance) licence | Required for PIM |
+
+PIM does **not** depend on any resource from the deployment plan.
+
+---
+
+## Parameters
+
+| Parameter | Source | Description |
+|---|---|---|
+| `principalId` | Computed: object ID of `requestorEmail` | |
+| `roleDefinitionGuid` | `PIM_READER_ROLE_DEFINITION_ID` | Role GUID (proposed default: Reader `acdd72a7-3385-48ef-bd42-f606fba81ae7`) |
+| `requestType` | `PIM_REQUEST_TYPE` | `AdminAssign` (new), `AdminUpdate`, `AdminRemove`, `AdminExtend`, `AdminRenew` |
+| `duration` | `PIM_MAX_DURATION` | ISO 8601 duration from the module's allowed list: `PT1H` … `PT24H`, `P1D` … `P365D`, `P1W` … `P4W`, `P1M` … `P12M`, `P1Y`, `P2Y` |
+| `justification` | `PIM_JUSTIFICATION` | Required; the job fails if it is empty |
+| `requestPolicyValidated` | Set to `true` by the workflow | Guardrail: `@allowed([true])`, so a direct deployment without it is rejected |
+| `startDateTime` | Default `utcNow()` | Start of the eligibility |
+| `azureResourcePimPolicy`, `entraRolePimPolicy`, `groupPimPolicy`, `pimAssignmentDefaults` | Default `{}` | Accepted for traceability only; **not applied** to Azure |
+
+## Outputs
+
+| Output | Description |
+|---|---|
+| `deployedResourceId` / `deployedResourceName` | Request ID and GUID name (written to the inventory CSV) |
+| `eligibilityRequestId` / `eligibilityRequestName` | Same values |
+
+---
+
+## Files in this directory
+
+| File | Status |
+|---|---|
+| [pim.bicep](pim.bicep) | ✅ Used by `access.yml` |
+| [pim-policy-settings.bicepparam](pim-policy-settings.bicepparam) | 📝 Policy *intent* (Owner / User Access Administrator, Entra roles, PIM for Groups). **Not used by the workflow** and not written to Azure. |
+| [pim.json](pim.json) | ⚠️ An older compiled ARM template. Its parameters (e.g. `roleDefinitionId`) no longer match `pim.bicep` (`roleDefinitionGuid`). The workflow deploys the `.bicep` file, not this one. |
+
+---
+
+## Behaviour notes
+
+- **Not idempotent:** the request name includes `startDateTime` (`utcNow()`), so every run submits a **new** request. Submitting `AdminAssign` for a user who is already eligible for the same role and scope fails with `RoleAssignmentExists`. Use `AdminExtend` or `AdminRenew` for that case.
+- **Role settings** (activation duration, MFA, approval, ticket info) are **not** configured by this module. They come from the PIM settings of the role in the subscription.
+- The comments in `pim.bicep` mention a "PowerShell runner" that validates the policy. In the current workflow, `access.yml` sets `requestPolicyValidated=true` itself, after checking the justification and the allowed values. No PowerShell is run.
+
+## Manual test
+
+```bash
+az deployment sub what-if --location eastus \
+  --template-file modules/access/pim/pim.bicep \
+  --parameters principalId=<OBJECT_ID> roleDefinitionGuid=acdd72a7-3385-48ef-bd42-f606fba81ae7 \
+               requestType=AdminAssign duration=P90D justification="<reason>" requestPolicyValidated=true
 ```
 
-Required request parameters must be supplied. Bicep does not parse root JSON automatically; the caller/runner must map those values.
-
-See [CLI local testing](../../docs/CLI_LOCAL_TESTING.md).
-
-## ⚠️ Current limitations
-
-- Azure Resource PIM eligibility schedule creation is the only implemented PIM operation in this Bicep template.
-- Activation policy enforcement is not implemented.
-- Entra directory-role and PIM for Groups policy writes are not implemented.
-- Ticket metadata is not passed into the Azure resource.
-- The deployment command must select the correct subscription.
+More guides: [docs/PIM/](../../../docs/PIM/).
