@@ -1,0 +1,115 @@
+// Pike naming: stpike<purpose><env>      e.g. stpikesftpdev
+// No spaces, no hyphens, all lowercase: 3-24 lowercase letters/digits only.
+// Globally unique via the "pike" prefix.
+// Length limit 24: stpike(6) + purpose(<=14) + env(<=4) = 24.
+
+@description('Environment token.')
+@allowed(['dev', 'qa', 'uat', 'prod'])
+param environmentName string
+
+@description('Workload token (used for the workload tag).')
+@minLength(3)
+@maxLength(60)
+param workload string
+
+@description('Deployment purpose token (input.json target.purpose), lowercase letters/digits.')
+@minLength(2)
+@maxLength(11)
+param purpose string
+
+@description('Azure region.')
+param location string
+
+@description('Storage account SKU.')
+param skuName string
+
+@description('Storage account kind.')
+param kind string
+
+@description('Blob access tier.')
+param accessTier string
+
+@description('Minimum TLS version.')
+param minimumTlsVersion string
+
+@description('Require HTTPS for data-plane traffic.')
+param supportsHttpsTrafficOnly bool
+
+@description('Allow anonymous blob access.')
+param allowBlobPublicAccess bool
+
+@description('Allow Shared Key authorization.')
+param allowSharedKeyAccess bool
+
+@description('Public network access setting.')
+@allowed([
+  'Enabled'
+  'Disabled'
+])
+param publicNetworkAccess string
+
+@description('Container names to create.')
+param containerNames array
+
+@description('Blob service name (normally default).')
+param blobServiceName string
+
+@description('Container public access level.')
+@allowed([
+  'None'
+  'Blob'
+  'Container'
+])
+param containerPublicAccess string
+
+@description('Tags. Must contain owner, cost-center and data-class; env and workload are added here.')
+param tags object
+
+// Storage account rule: no spaces, no hyphens, all lowercase. The name is normalised here so a
+// non-compliant name can never be produced, even if a caller passes a mixed-case or hyphenated token.
+var storageAccountName = toLower(replace(replace(replace(replace('stpike${purpose}${environmentName}', ' ', ''), '-', ''), '_', ''), '.', ''))
+
+resource storageAccount 'Microsoft.Storage/storageAccounts@2023-05-01' = {
+  name: storageAccountName
+  location: location
+  tags: union(tags, { env: environmentName, workload: workload })
+  sku: {
+    name: skuName
+  }
+  kind: kind
+  properties: {
+    accessTier: accessTier
+    minimumTlsVersion: minimumTlsVersion
+    supportsHttpsTrafficOnly: supportsHttpsTrafficOnly
+    allowBlobPublicAccess: allowBlobPublicAccess
+    allowSharedKeyAccess: allowSharedKeyAccess
+    publicNetworkAccess: publicNetworkAccess
+  }
+}
+
+resource blobService 'Microsoft.Storage/storageAccounts/blobServices@2023-05-01' = {
+  parent: storageAccount
+  name: blobServiceName
+  properties: {
+    deleteRetentionPolicy: {
+      enabled: false
+      allowPermanentDelete: false
+    }
+  }
+}
+
+resource containers 'Microsoft.Storage/storageAccounts/blobServices/containers@2023-05-01' = [
+  for containerName in containerNames: {
+    parent: blobService
+    name: containerName
+    properties: {
+      publicAccess: containerPublicAccess
+      defaultEncryptionScope: '$account-encryption-key'
+      denyEncryptionScopeOverride: false
+    }
+  }
+]
+
+output deployedResourceId string = storageAccount.id
+output deployedResourceName string = storageAccount.name
+output containerNamesOut array = containerNames
