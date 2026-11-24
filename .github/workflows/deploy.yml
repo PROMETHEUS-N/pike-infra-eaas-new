@@ -133,6 +133,67 @@ jobs:
             core.setOutput('rbac-requestor-email', emails.rbac || '');
             core.setOutput('pim-requestor-email', emails.pim || '');
 
+            // ---------------------------------------------------------------------------------
+            // Resource name check: the names the modules will build are checked against the
+            // Microsoft naming rules (length + characters) BEFORE anything is deployed, so a
+            // too-long or invalid name never reaches Azure. Source:
+            // https://learn.microsoft.com/azure/azure-resource-manager/management/resource-name-rules
+            // Key Vault, storage account and Azure OpenAI get a unique suffix inside the module
+            // (uniqueString of the resource group); only its length is known here.
+            // ---------------------------------------------------------------------------------
+            if (!errors.length) {
+              const NET = { re: /^[A-Za-z0-9]([A-Za-z0-9_.-]*[A-Za-z0-9_])?$/, chars: 'letters, digits, _ . - ; start with a letter/digit; end with a letter, digit or _' };
+              const LOWER = { re: /^[a-z0-9]([a-z0-9-]*[a-z0-9])?$/, chars: 'lowercase letters, digits and hyphens; cannot start or end with a hyphen' };
+              const ALNUM = { re: /^[a-z][a-z0-9]*$/, chars: 'lowercase letters and digits only (no spaces, no hyphens); start with a letter' };
+              const VM = { re: /^[A-Za-z0-9]([A-Za-z0-9-]*[A-Za-z0-9])?$/, chars: 'letters, digits and hyphens; no periods; cannot end with a hyphen' };
+              const RG = { re: /^[A-Za-z0-9_.()-]*[A-Za-z0-9_()-]$/, chars: 'letters, digits, _ . - ( ); cannot end with a period' };
+              // Unique-suffix names: base + suffix of up to 6 characters, never fewer than 3.
+              const suffixed = (base, max) => ({ name: base, suffix: Math.min(6, max - base.length) });
+              const vmName = os => `vm-pike-${system}-${purpose}-${os}-${environment}`;
+              const vmNames = os => [
+                { label: 'VM', name: vmName(os), min: 1, max: 64, ...VM },
+                { label: 'VM network interface', name: `nic-${vmName(os)}`, min: 1, max: 80, ...NET }];
+              const NAME_RULES = {
+                resourceGroup: [{ label: 'Resource group', name: `rg-${workload}-${environment}`, min: 1, max: 90, ...RG }],
+                virtualNetwork: [{ label: 'Virtual network', name: `vnet-pike-${environment}`, min: 2, max: 64, ...NET }],
+                subnet: [{ label: 'Subnet', name: `snet-${purpose}`, min: 1, max: 80, ...NET }],
+                applicationGatewaySubnet: [{ label: 'Application Gateway subnet', name: `snet-${purpose}-agw`, min: 1, max: 80, ...NET }],
+                networkSecurityGroup: [{ label: 'Network security group', name: `nsg-pike-${purpose}-${environment}`, min: 1, max: 80, ...NET }],
+                routeTable: [{ label: 'Route table', name: `rt-pike-${purpose}-${environment}`, min: 1, max: 80, ...NET }],
+                loadBalancer: [{ label: 'Load balancer', name: `lb-pike-${purpose}-${environment}`, min: 1, max: 80, ...NET }],
+                applicationGateway: [
+                  { label: 'Application Gateway', name: `agw-pike-${environment}`, min: 1, max: 80, ...NET },
+                  { label: 'Application Gateway public IP', name: `pip-agw-pike-${environment}`, min: 1, max: 80, ...NET }],
+                keyVault: [{ label: 'Key Vault (globally unique)', ...suffixed(`kvpike${purpose}${environment}`, 24), min: 3, max: 24, ...ALNUM }],
+                storageAccount: [{ label: 'Storage account (globally unique)', ...suffixed(`stpike${purpose}${environment}`, 24), min: 3, max: 24, ...ALNUM }],
+                openAi: [{ label: 'Azure OpenAI account + custom subdomain (globally unique)', name: `oaipike${purpose}${environment}`, suffix: 6, min: 2, max: 64, ...ALNUM }],
+                sqlDatabase: [
+                  { label: 'Azure SQL server (globally unique)', name: `sql-${workload}-${environment}-`, suffix: 6, min: 1, max: 63, re: /^[a-z0-9][a-z0-9-]*-$/, chars: 'lowercase letters, digits and hyphens; cannot start with a hyphen' },
+                  { label: 'Azure SQL database', name: purpose, min: 1, max: 128, re: /^[^<>*%&:\\/?]*[^<>*%&:\\/?. ]$/, chars: 'no < > * % & : \\ / ? ; cannot end with a period or space' }],
+                postgresql: [
+                  { label: 'PostgreSQL flexible server (globally unique)', name: `psql-pike-${purpose}-${environment}-`, suffix: 6, min: 3, max: 63, re: /^[a-z0-9][a-z0-9-]*-$/, chars: 'lowercase letters, digits and hyphens; cannot start with a hyphen' },
+                  { label: 'PostgreSQL delegated subnet', name: `snet-${purpose}-psql`, min: 1, max: 80, ...NET }],
+                vmWindows: vmNames('win'),
+                vmLinux: vmNames('lnx'),
+                vmWindowsSql: vmNames('sql')
+              };
+              const nameRows = [];
+              for (const key of ['resourceGroup', ...TARGETS.filter(k => k !== 'resourceGroup' && targets[k] === 'yes')]) {
+                for (const r of NAME_RULES[key] || []) {
+                  const suffix = r.suffix || 0;
+                  const length = r.name.length + suffix;
+                  const shown = suffix ? `${r.name} + ${suffix}-char unique suffix` : r.name;
+                  const problems = [];
+                  if (suffix && suffix < 3) problems.push('not enough room left for the unique suffix');
+                  if (length < r.min || length > r.max) problems.push(`${length} characters (allowed ${r.min}-${r.max})`);
+                  if (!r.re.test(r.name)) problems.push(`invalid characters (allowed: ${r.chars})`);
+                  if (problems.length) errors.push(`${r.label} name "${shown}" is invalid: ${problems.join('; ')}. Shorten target.workload / target.system / target.purpose.`);
+                  nameRows.push(`| ${r.label} | \`${shown}\` | ${length} / ${r.min}-${r.max} | ${problems.length ? '❌' : '✅'} |`);
+                }
+              }
+              await core.summary.addRaw(`## Resource name check\n\n| Resource | Name | Length / allowed | OK |\n|---|---|---|---|\n${nameRows.join('\n')}\n\n`).write();
+            }
+
             if (errors.length) { core.setFailed('input.json is invalid:\n- ' + errors.join('\n- ')); return; }
 
             // ---------------------------------------------------------------------------------

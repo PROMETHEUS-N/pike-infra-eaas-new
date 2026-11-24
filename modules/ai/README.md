@@ -8,8 +8,8 @@ Creates an **Azure OpenAI account** (a Cognitive Services account of kind `OpenA
 | **Azure resource** | `Microsoft.CognitiveServices/accounts@2023-05-01`, `kind: OpenAI` |
 | **Deployment scope** | Resource group |
 | **`input.json` key** | `resourceTargets.openAi` |
-| **Name** | `oai-pike-<purpose>-<env>` → e.g. `oai-pike-app-dev` |
-| **Endpoint** | `https://oai-pike-<purpose>-<env>.openai.azure.com/` (the custom subdomain uses the same name) |
+| **Name** | `oaipike<purpose><env><suffix>` → e.g. `oaipikeappdev` + 6 characters (all lowercase, no hyphens). See [Naming rules](#naming-rules) |
+| **Endpoint** | `https://<name>.openai.azure.com/` (the custom subdomain uses the same name) |
 
 ---
 
@@ -25,7 +25,7 @@ Azure OpenAI hosts OpenAI models (GPT, embeddings, …) inside Azure, with Entra
 
 ```mermaid
 flowchart LR
-    RG["Resource group"] --> OAI["oai-pike-&lt;purpose&gt;-&lt;env&gt;<br/>kind OpenAI · SKU S0"]
+    RG["Resource group"] --> OAI["oaipike&lt;purpose&gt;&lt;env&gt;&lt;suffix&gt;<br/>kind OpenAI · SKU S0"]
     OAI -. "not created by this module" .-> DEP["Model deployments<br/>(gpt-4o, embeddings, …)"]
     OAI -. "not created" .-> PE["Private endpoint"]
 
@@ -38,6 +38,26 @@ flowchart LR
 | **Needs** | Resource group | No network dependency |
 | **Needs (subscription)** | Access to Azure OpenAI in the region | The subscription must be allowed to create `OpenAI` accounts in `target.location` |
 | **Not created** | Model deployments, private endpoint, role assignments | |
+
+---
+
+## Naming rules
+
+| Rule | Microsoft limit | Pike name |
+|---|---|---|
+| Account name (`Microsoft.CognitiveServices/accounts`) | Unique in the resource group · **2–64** characters · alphanumerics and hyphens · start and end with an alphanumeric | ✅ |
+| Custom subdomain (`customSubDomainName`) | **Unique across Azure** (it is the endpoint host name) · **2–64** characters · alphanumerics and hyphens · cannot end with a hyphen · **cannot be changed after creation** | ✅ same value as the account name |
+| Pike convention | All **lowercase**, **no spaces**, **no hyphens** | ✅ |
+
+The name is `oaipike` + `purpose` + `env` + a **6-character suffix**, where `<suffix>` = first characters of `uniqueString(<resource group ID>)`:
+
+- **Unique:** the suffix is different for every subscription and resource group, so two environments or two clients can never ask for the same subdomain.
+- **Stable:** the suffix is deterministic. Re-running the workflow in the same resource group produces the same name, so the existing account is updated and no duplicate is created.
+- **Always valid:** the module lower-cases the name and strips spaces, `-`, `_` and `.`. Length: `oaipike` (7) + purpose (2–11) + env (2–4) + suffix (6) = **17–28** characters, well under 64.
+
+The exact name is printed in the run summary and in the inventory CSV (`deployedResourceName`).
+
+> 🔁 A deleted account is **soft-deleted for 48 hours** and its name cannot be reused in that time. Because the suffix is stable, re-creating the account in the same resource group needs the deleted one to be purged first (`az cognitiveservices account purge`).
 
 ---
 
@@ -54,7 +74,7 @@ flowchart LR
 | Output | Description |
 |---|---|
 | `deployedResourceId` | Account resource ID |
-| `deployedResourceName` | `oai-pike-<purpose>-<env>` |
+| `deployedResourceName` | `oaipike<purpose><env><suffix>` |
 | `endpoint` | The account endpoint URL |
 
 ---
@@ -75,7 +95,7 @@ The team hit **availability problems when deploying Azure OpenAI in `eastus`** (
 |---|---|---|
 | `InsufficientQuota` / quota exceeded | The subscription has no free quota for this resource or model in the region | Request quota, or use another region |
 | `SkuNotAvailable` / `LocationNotAvailableForResourceType` | `OpenAI` accounts (or the SKU) are not offered to this subscription in the region | Choose a region where the `S0` SKU is listed (see the commands below) |
-| `CustomDomainInUse` / subdomain already taken | The custom subdomain `oai-pike-<purpose>-<env>` is globally unique and already used (or soft-deleted) | Purge the soft-deleted account, or use another `purpose` |
+| `CustomDomainInUse` / subdomain already taken | The custom subdomain is unique across Azure and is still held by a soft-deleted account from an earlier run in the same resource group | Purge the soft-deleted account (`az cognitiveservices account purge`) |
 | Model not available (when deploying models later) | Model availability differs **per region and per model version** | Check model availability for the region before choosing it |
 
 > 🔁 A deleted Cognitive Services account is **soft-deleted** and keeps its name reserved. Purge it (`az cognitiveservices account purge`) before you re-create the same name.

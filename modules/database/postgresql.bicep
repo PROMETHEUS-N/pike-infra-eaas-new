@@ -1,8 +1,15 @@
 // Pike naming:
-//   Server:            psql-pike-<purpose>-<env>      e.g. psql-pike-mdm-dev
+//   Server:            psql-pike-<purpose>-<env>-<suffix>      e.g. psql-pike-mdm-dev + 6-char suffix
 //   Delegated subnet:  snet-<purpose>-psql inside vnet-pike-<env>
 //   Private DNS link:  link-vnet-pike-<env>
-// Globally unique via the "pike" prefix.
+//
+// Microsoft rule (server name): globally unique (it is the FQDN <name>.postgres.database.azure.com),
+// 3-63 characters, lowercase letters, digits and hyphens, cannot start or end with a hyphen.
+//
+// Uniqueness: <suffix> = uniqueString(resource group ID), 6 characters. It is deterministic, so a re-run
+// in the same resource group gets the same name (idempotent), while another subscription / resource
+// group gets a different one.
+// Length: psql-pike-(10) + purpose(2-11) + -(1) + env(2-4) + -(1) + suffix(6) = 22-33 characters.
 
 @description('Environment token.')
 @allowed(['dev', 'qa', 'uat', 'prod'])
@@ -80,7 +87,7 @@ param privateDnsZoneName string
 @description('Tags. Must contain owner, cost-center and data-class; env and workload are added here.')
 param tags object
 
-var serverName = 'psql-pike-${purpose}-${environmentName}'
+var serverName = toLower('psql-pike-${purpose}-${environmentName}-${take(uniqueString(resourceGroup().id, 'Microsoft.DBforPostgreSQL/flexibleServers'), 6)}')
 var vnetName = 'vnet-pike-${environmentName}'
 var subnetName = 'snet-${purpose}-psql'
 var privateDnsZoneLinkName = 'link-${vnetName}'

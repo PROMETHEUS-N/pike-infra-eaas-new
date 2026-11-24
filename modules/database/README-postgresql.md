@@ -8,7 +8,7 @@ Creates an **Azure Database for PostgreSQL – Flexible Server** with **private 
 | **Azure resources** | `Microsoft.DBforPostgreSQL/flexibleServers@2023-06-01-preview`, `Microsoft.Network/virtualNetworks/subnets`, `Microsoft.Network/privateDnsZones`, `…/virtualNetworkLinks` |
 | **Deployment scope** | Resource group |
 | **`input.json` key** | `resourceTargets.postgresql` |
-| **Server name** | `psql-pike-<purpose>-<env>` → e.g. `psql-pike-app-dev` (FQDN `psql-pike-app-dev.postgres.database.azure.com`) |
+| **Server name** | `psql-pike-<purpose>-<env>-<suffix>` → e.g. `psql-pike-app-dev-` + 6 characters (FQDN `<name>.postgres.database.azure.com`). `<suffix>` = first 6 characters of `uniqueString(<resource group ID>)`: unique across Azure, stable on re-runs in the same resource group. Microsoft limit: 3–63 characters, lowercase letters, digits and hyphens |
 
 ---
 
@@ -28,7 +28,7 @@ flowchart TB
       SNET["Delegated subnet<br/>snet-&lt;purpose&gt;-psql<br/>POSTGRESQL_SUBNET_ADDRESS_PREFIX<br/>delegation: Microsoft.DBforPostgreSQL/flexibleServers"]
       DNS["Private DNS zone (global)<br/>POSTGRESQL_PRIVATE_DNS_ZONE_NAME"]
       LINK["VNet link<br/>link-vnet-pike-&lt;env&gt;"]
-      PG[("psql-pike-&lt;purpose&gt;-&lt;env&gt;<br/>location: target.location")]
+      PG[("psql-pike-&lt;purpose&gt;-&lt;env&gt;-&lt;suffix&gt;<br/>location: target.location")]
     end
 
     VNET --> SNET

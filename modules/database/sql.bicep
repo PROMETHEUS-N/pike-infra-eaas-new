@@ -1,6 +1,15 @@
 // Pike naming:
-//   Azure SQL (apps) server: sql-<workload>-<env>   e.g. sql-app-kbase-dev
-//   Database:                <purpose>             e.g. app
+//   Azure SQL (apps) server: sql-<workload>-<env>-<suffix>   e.g. sql-app-kbase-dev + 6-char suffix
+//   Database:                <purpose>                      e.g. app
+//
+// Microsoft rule (Microsoft.Sql/servers): globally unique (it is the FQDN <name>.database.windows.net),
+// 1-63 characters, lowercase letters, digits and hyphens, cannot start or end with a hyphen.
+//
+// Uniqueness: <suffix> = uniqueString(resource group ID), 6 characters. It is deterministic, so a re-run
+// in the same resource group gets the same name (idempotent), while another subscription / resource
+// group gets a different one.
+// Length: sql-(4) + workload + -(1) + env(2-4) + -(1) + suffix(6) <= 63, so workload <= 47 characters.
+// The plan job in deploy.yml checks the full length before anything is deployed.
 
 @description('Environment token.')
 @allowed(['dev', 'qa', 'uat', 'prod'])
@@ -55,7 +64,7 @@ param minimumTlsVersion string
 @description('Tags. Must contain owner, cost-center and data-class; env and workload are added here.')
 param tags object
 
-var serverName = 'sql-${workload}-${environmentName}'
+var serverName = toLower('sql-${workload}-${environmentName}-${take(uniqueString(resourceGroup().id, 'Microsoft.Sql/servers'), 6)}')
 var resourceTags = union(tags, { env: environmentName, workload: workload })
 
 resource sqlServer 'Microsoft.Sql/servers@2021-11-01' = {

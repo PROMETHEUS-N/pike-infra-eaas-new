@@ -1,5 +1,15 @@
-// Pike naming: kv-pike-<purpose>-<env>      e.g. kv-pike-app-dev
-// Globally unique via the "pike" prefix. Length limit 24: kv-pike-(8) + purpose(<=11) + -(1) + env(<=4) = 24.
+// Pike naming: kvpike<purpose><env><suffix>      e.g. kvpikeappdev + 6-char suffix
+//
+// Microsoft rule (Microsoft.KeyVault/vaults): globally unique, 3-24 characters, alphanumerics and
+// hyphens, must start with a letter, end with a letter or digit, no consecutive hyphens.
+// Pike rule on top: all lowercase, no spaces, no hyphens.
+//
+// Uniqueness: <suffix> = uniqueString(resource group ID). It is deterministic, so a re-run in the same
+// resource group gets the same name (idempotent), while another subscription / resource group gets a
+// different one. Note: a soft-deleted vault keeps its name until the retention period ends or it is purged.
+//
+// Length budget (max 24): kvpike(6) + purpose(2-11) + env(2-4) = 10-21, suffix fills the rest up to 6.
+// The suffix is never shorter than 3 characters, so the name is always 13-24 characters.
 
 @description('Environment token.')
 @allowed(['dev', 'qa', 'uat', 'prod'])
@@ -55,7 +65,10 @@ param publicNetworkAccess string
 @description('Tags. Must contain owner, cost-center and data-class; env and workload are added here.')
 param tags object
 
-var keyVaultName = 'kv-pike-${purpose}-${environmentName}'
+// Lowercase only, with no spaces, hyphens, underscores or periods, even if a caller passes such a token.
+var keyVaultNameBase = toLower(replace(replace(replace(replace('kvpike${purpose}${environmentName}', ' ', ''), '-', ''), '_', ''), '.', ''))
+var keyVaultNameSuffix = take(uniqueString(resourceGroup().id, 'Microsoft.KeyVault/vaults'), min(6, 24 - length(keyVaultNameBase)))
+var keyVaultName = '${keyVaultNameBase}${keyVaultNameSuffix}'
 
 resource keyVault 'Microsoft.KeyVault/vaults@2023-07-01' = {
   name: keyVaultName

@@ -1,7 +1,14 @@
-// Pike naming: stpike<purpose><env>      e.g. stpikesftpdev
-// No spaces, no hyphens, all lowercase: 3-24 lowercase letters/digits only.
-// Globally unique via the "pike" prefix.
-// Length limit 24: stpike(6) + purpose(<=14) + env(<=4) = 24.
+// Pike naming: stpike<purpose><env><suffix>      e.g. stpikeappdev + 6-char suffix
+//
+// Microsoft rule (Microsoft.Storage/storageAccounts): globally unique across Azure, 3-24 characters,
+// lowercase letters and numbers only (no spaces, no hyphens).
+//
+// Uniqueness: <suffix> = uniqueString(resource group ID). It is deterministic, so a re-run in the same
+// resource group gets the same name (idempotent), while another subscription / resource group gets a
+// different one.
+//
+// Length budget (max 24): stpike(6) + purpose(2-11) + env(2-4) = 10-21, suffix fills the rest up to 6.
+// The suffix is never shorter than 3 characters, so the name is always 13-24 characters.
 
 @description('Environment token.')
 @allowed(['dev', 'qa', 'uat', 'prod'])
@@ -67,7 +74,9 @@ param tags object
 
 // Storage account rule: no spaces, no hyphens, all lowercase. The name is normalised here so a
 // non-compliant name can never be produced, even if a caller passes a mixed-case or hyphenated token.
-var storageAccountName = toLower(replace(replace(replace(replace('stpike${purpose}${environmentName}', ' ', ''), '-', ''), '_', ''), '.', ''))
+var storageAccountNameBase = toLower(replace(replace(replace(replace('stpike${purpose}${environmentName}', ' ', ''), '-', ''), '_', ''), '.', ''))
+var storageAccountNameSuffix = take(uniqueString(resourceGroup().id, 'Microsoft.Storage/storageAccounts'), min(6, 24 - length(storageAccountNameBase)))
+var storageAccountName = '${storageAccountNameBase}${storageAccountNameSuffix}'
 
 resource storageAccount 'Microsoft.Storage/storageAccounts@2023-05-01' = {
   name: storageAccountName

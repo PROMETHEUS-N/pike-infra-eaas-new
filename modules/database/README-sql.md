@@ -8,7 +8,7 @@ Creates an **Azure SQL logical server** and **one Azure SQL Database** on it.
 | **Azure resources** | `Microsoft.Sql/servers@2021-11-01`, `Microsoft.Sql/servers/databases@2021-11-01` |
 | **Deployment scope** | Resource group |
 | **`input.json` key** | `resourceTargets.sqlDatabase` |
-| **Server name** | `sql-<workload>-<env>` → e.g. `sql-platform-svc-dev` (FQDN `sql-platform-svc-dev.database.windows.net`) |
+| **Server name** | `sql-<workload>-<env>-<suffix>` → e.g. `sql-platform-svc-dev-` + 6 characters (FQDN `<name>.database.windows.net`). `<suffix>` = first 6 characters of `uniqueString(<resource group ID>)`: unique across Azure, stable on re-runs in the same resource group. Microsoft limit: 1–63 characters, lowercase letters, digits and hyphens |
 | **Database name** | `<purpose>` → e.g. `app` |
 
 > This is the **PaaS** Azure SQL Database. For SQL Server on a VM, use `vmWindowsSql` (see [compute/README.md](../compute/README.md)).
@@ -96,7 +96,7 @@ With `AZURE_SQL_PUBLIC_NETWORK_ACCESS = Disabled` (the current `dev` value) and 
 
 ## Naming notes
 
-- The server name is **globally unique** (it is a DNS name). `sql-<workload>-<env>` has no `pike` prefix, so a common workload such as `platform-svc` could already be taken by another tenant. The deployment then fails with `NameAlreadyExists`.
+- The server name is **globally unique** (it is a DNS name). The 6-character `uniqueString` suffix prevents `NameAlreadyExists` when another tenant already uses `sql-<workload>-<env>`. Because of the suffix, `target.workload` can be at most 47 characters; the `plan` job checks this.
 - A deleted logical server name may stay reserved for a short time.
 
 ## Checking region availability

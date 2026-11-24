@@ -8,7 +8,7 @@ Creates a **general-purpose Storage Account** with its blob service and a list o
 | **Azure resources** | `Microsoft.Storage/storageAccounts`, `…/blobServices`, `…/blobServices/containers` (`@2023-05-01`) |
 | **Deployment scope** | Resource group |
 | **`input.json` key** | `resourceTargets.storageAccount` |
-| **Name** | `stpike<purpose><env>` → e.g. `stpikeappdev` |
+| **Name** | `stpike<purpose><env><suffix>` → e.g. `stpikeappdev` + 6 characters (all lowercase, no hyphens, max 24). See [Naming rules](#naming-rules) |
 
 ---
 
@@ -22,7 +22,7 @@ It is a container for Azure Storage data services: blobs, files, queues and tabl
 
 ```mermaid
 flowchart LR
-    RG["Resource group"] --> ST["stpike&lt;purpose&gt;&lt;env&gt;"]
+    RG["Resource group"] --> ST["stpike&lt;purpose&gt;&lt;env&gt;&lt;suffix&gt;"]
     ST --> BS["blobServices/default"] --> C["containers<br/>(STORAGE_ACCOUNT_CONTAINER_NAMES)"]
     ST -. "RBAC_SCOPE = storageAccount" .-> RBAC["RBAC role assignment"]
 
@@ -33,19 +33,33 @@ flowchart LR
 | Direction | Resource | Notes |
 |---|---|---|
 | **Needs** | Resource group | No network dependency; public network access is controlled by a variable |
-| **Needed by** | RBAC with `RBAC_SCOPE=storageAccount` | `RBAC_resource.bicep` looks the account up by `RBAC_STORAGE_ACCOUNT_NAME` |
+| **Needed by** | RBAC with `RBAC_SCOPE=storageAccount` | `RBAC_resource.bicep` looks the account up by `RBAC_STORAGE_ACCOUNT_NAME`. Set it to the full name, including the suffix, from the run summary |
 
 ---
 
 ## Naming rules
 
-Storage account names must be **3–24 characters, lowercase letters and digits only, and globally unique**. The module therefore:
+| Rule | Microsoft limit (`Microsoft.Storage/storageAccounts`) | Pike name |
+|---|---|---|
+| Uniqueness | **Unique across all of Azure** (the name becomes `https://<name>.blob.core.windows.net`) | ✅ unique suffix |
+| Length | **3–24** characters | ✅ always 13–24 |
+| Characters | **Lowercase letters and numbers only**: no spaces, no hyphens, no underscores, no periods | ✅ |
 
-- builds `stpike` + `purpose` + `env` with no separators;
-- removes spaces, `-`, `_` and `.` and lower-cases the result, so a non-compliant name can never be produced;
-- relies on the `pike` prefix for global uniqueness. If the name is already taken in another subscription, the deployment fails with `StorageAccountAlreadyTaken`, and a different `purpose` is needed.
+The name is `stpike` + `purpose` + `env` + a suffix, where `<suffix>` = first characters of `uniqueString(<resource group ID>)`:
 
-Length budget: `stpike` (6) + purpose (≤ 11) + env (≤ 4) = at most 21 characters.
+| Part | Length |
+|---|---|
+| `stpike` | 6 |
+| `purpose` (validated by the pipeline: 2–11 lowercase letters/digits) | 2–11 |
+| `env` (`dev`, `qa`, `uat`, `prod`) | 2–4 |
+| Suffix: **6** characters, shortened only when needed to stay at 24 (never fewer than 3) | 3–6 |
+| **Total** | **13–24** |
+
+- **Unique:** the suffix differs for every subscription and resource group, so the deployment does not fail with `StorageAccountAlreadyTaken` because someone else already owns `stpikeappdev`.
+- **Stable:** the suffix is deterministic. Re-running the workflow in the same resource group produces the same name and updates the existing account.
+- **Always valid:** the module removes spaces, `-`, `_` and `.` and lower-cases the result, so a non-compliant name can never be produced.
+
+The exact name is printed in the run summary and in the inventory CSV (`deployedResourceName`). Use that value for `RBAC_STORAGE_ACCOUNT_NAME` when `RBAC_SCOPE=storageAccount`.
 
 ---
 

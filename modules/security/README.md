@@ -8,7 +8,7 @@ Creates an **Azure Key Vault** for storing secrets, keys and certificates.
 | **Azure resource** | `Microsoft.KeyVault/vaults@2023-07-01` |
 | **Deployment scope** | Resource group |
 | **`input.json` key** | `resourceTargets.keyVault` |
-| **Name** | `kv-pike-<purpose>-<env>` → e.g. `kv-pike-app-dev` |
+| **Name** | `kvpike<purpose><env><suffix>` → e.g. `kvpikeappdev` + 6 characters (all lowercase, no hyphens, max 24). See [Naming rules](#naming-rules) |
 
 ---
 
@@ -23,7 +23,7 @@ Key Vault is a managed store for secrets (passwords, connection strings), crypto
 ```mermaid
 flowchart LR
     SUB{{"Tenant of the deployment<br/>(tenant().tenantId)"}} -.-> KV
-    RG["Resource group"] --> KV["kv-pike-&lt;purpose&gt;-&lt;env&gt;"]
+    RG["Resource group"] --> KV["kvpike&lt;purpose&gt;&lt;env&gt;&lt;suffix&gt;"]
     KV -. "data-plane access via RBAC<br/>(not created by this module)" .-> APPS["Apps / identities"]
 
     classDef kv fill:#dbeafe,stroke:#2563eb,color:#172554
@@ -40,8 +40,28 @@ flowchart LR
 
 ## Naming rules
 
-Vault names must be **3–24 characters, globally unique** (they become `https://<name>.vault.azure.net`).
-Length budget: `kv-pike-` (8) + purpose (≤ 11) + `-` (1) + env (≤ 4) = at most 24 characters. This is why `target.purpose` is limited to 11 characters.
+| Rule | Microsoft limit (`Microsoft.KeyVault/vaults`) | Pike name |
+|---|---|---|
+| Uniqueness | **Global** (the name becomes `https://<name>.vault.azure.net`) | ✅ unique suffix |
+| Length | **3–24** characters | ✅ always 13–24 |
+| Characters | Alphanumerics and hyphens · start with a letter · end with a letter or digit · no consecutive hyphens | ✅ starts with `k`, letters/digits only |
+| Pike convention | All **lowercase**, **no spaces**, **no hyphens** | ✅ |
+
+The name is `kvpike` + `purpose` + `env` + a suffix, where `<suffix>` = first characters of `uniqueString(<resource group ID>)`:
+
+| Part | Length |
+|---|---|
+| `kvpike` | 6 |
+| `purpose` (validated by the pipeline: 2–11 lowercase letters/digits) | 2–11 |
+| `env` (`dev`, `qa`, `uat`, `prod`) | 2–4 |
+| Suffix: **6** characters, shortened only when needed to stay at 24 (never fewer than 3) | 3–6 |
+| **Total** | **13–24** |
+
+- **Unique:** the suffix differs for every subscription and resource group, so two environments or two clients can never collide on the global name.
+- **Stable:** the suffix is deterministic. Re-running the workflow in the same resource group produces the same name and updates the existing vault instead of creating a second one.
+- **Always valid:** the module lower-cases the name and strips spaces, `-`, `_` and `.`.
+
+The exact name is printed in the run summary and in the inventory CSV (`deployedResourceName`).
 
 > ⚠️ **Soft delete and purge protection:** a deleted vault keeps its name reserved for the retention period. With purge protection on, the vault **cannot be purged** early. Re-creating the same name during that period fails until the soft-deleted vault is recovered or the period ends.
 
@@ -65,7 +85,7 @@ Length budget: `kv-pike-` (8) + purpose (≤ 11) + `-` (1) + env (≤ 4) = at mo
 | Output | Description |
 |---|---|
 | `deployedResourceId` | Vault resource ID |
-| `deployedResourceName` | `kv-pike-<purpose>-<env>` |
+| `deployedResourceName` | `kvpike<purpose><env><suffix>` |
 
 ---
 

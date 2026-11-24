@@ -552,7 +552,7 @@ The results appear as rows in the inventory CSV. See [docs/PIM/](docs/PIM/) and 
 
 ## 🏷️ Resource naming and tags
 
-Names are built **inside the modules** from the `target` tokens. They are deterministic (no random suffix and no instance numbers), so re-running the workflow updates the same resources instead of creating new ones.
+Names are built **inside the modules** from the `target` tokens. They are deterministic (no instance numbers), so re-running the workflow updates the same resources instead of creating new ones. The globally unique **Key Vault, storage account and Azure OpenAI** names are all lowercase with no hyphens, and they, the **PostgreSQL** server and the **Azure SQL server** end with a stable 6-character suffix (`uniqueString` of the resource group). The `plan` job checks every name against the Microsoft length and character limits before anything is deployed.
 
 | Resource | Pattern | Example (`purpose=app`, `system=sap`, `env=dev`) |
 |---|---|---|
@@ -561,11 +561,11 @@ Names are built **inside the modules** from the `target` tokens. They are determ
 | Subnet | `snet-<purpose>` | `snet-app` |
 | NSG / Route table | `nsg-pike-<purpose>-<env>` / `rt-pike-<purpose>-<env>` | `nsg-pike-app-dev` |
 | VM | `vm-pike-<system>-<purpose>-<win\|lnx\|sql>-<env>` | `vm-pike-sap-app-win-dev` |
-| Storage account | `stpike<purpose><env>` (no hyphens) | `stpikeappdev` |
-| Key Vault | `kv-pike-<purpose>-<env>` | `kv-pike-app-dev` |
-| Azure SQL server | `sql-<workload>-<env>` | `sql-platform-svc-dev` |
-| PostgreSQL | `psql-pike-<purpose>-<env>` | `psql-pike-app-dev` |
-| Azure OpenAI | `oai-pike-<purpose>-<env>` | `oai-pike-app-dev` |
+| Storage account | `stpike<purpose><env><suffix>` (lowercase, no hyphens, ≤ 24) | `stpikeappdev` + 6 chars |
+| Key Vault | `kvpike<purpose><env><suffix>` (lowercase, no hyphens, ≤ 24) | `kvpikeappdev` + 6 chars |
+| Azure SQL server | `sql-<workload>-<env>-<suffix>` (≤ 63) | `sql-platform-svc-dev-` + 6 chars |
+| PostgreSQL | `psql-pike-<purpose>-<env>-<suffix>` (≤ 63) | `psql-pike-app-dev-` + 6 chars |
+| Azure OpenAI | `oaipike<purpose><env><suffix>` (lowercase, no hyphens, ≤ 64) | `oaipikeappdev` + 6 chars |
 
 The PIKE naming standard (all 37 resource types) is in [docs/resource-naming-standard.md](docs/resource-naming-standard.md).
 
