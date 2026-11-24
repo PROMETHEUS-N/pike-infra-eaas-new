@@ -552,7 +552,7 @@ The results appear as rows in the inventory CSV. See [docs/PIM/](docs/PIM/) and 
 
 ## 🏷️ Resource naming and tags
 
-Names are built **inside the modules** from the `target` tokens. They are deterministic (no instance numbers), so re-running the workflow updates the same resources instead of creating new ones. The globally unique **Key Vault, storage account and Azure OpenAI** names are all lowercase with no hyphens, and they, the **PostgreSQL** server and the **Azure SQL server** end with a stable 6-character suffix (`uniqueString` of the resource group). The `plan` job checks every name against the Microsoft length and character limits before anything is deployed.
+Names are built **inside the modules** from the `target` tokens. They are deterministic (no instance numbers), so re-running the workflow updates the same resources instead of creating new ones. The globally unique **Key Vault, storage account and Azure OpenAI** names are all lowercase with no hyphens, and they, the **PostgreSQL** server and the **Azure SQL server** end with a stable 6-character suffix. For Key Vault, storage, Azure OpenAI and PostgreSQL the suffix is `uniqueString(resourceGuid)`, where `resourceGuid` = `guid(<resource group ID>, <resource type>)` is a globally defined GUID declared inside each module and returned as its `resourceGuid` output; the SQL server uses `uniqueString` of the resource group. The `plan` job checks every name against the Microsoft length and character limits before anything is deployed.
 
 | Resource | Pattern | Example (`purpose=app`, `system=sap`, `env=dev`) |
 |---|---|---|

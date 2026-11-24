@@ -3,8 +3,10 @@
 // Microsoft rule (Microsoft.Storage/storageAccounts): globally unique across Azure, 3-24 characters,
 // lowercase letters and numbers only (no spaces, no hyphens).
 //
-// Uniqueness: <suffix> = uniqueString(resource group ID). It is deterministic, so a re-run in the same
-// resource group gets the same name (idempotent), while another subscription / resource group gets a
+// Globally defined GUID: resourceGuid = guid(resource group ID, resource type), declared here in the
+// module (not in the workflow). The resource group ID already contains the subscription ID, so the GUID
+// is unique across Azure. <suffix> = uniqueString(resourceGuid), so the name is derived from that GUID.
+// It is deterministic, so a re-run in the same resource group gets the same name (idempotent), while another subscription / resource group gets a
 // different one.
 //
 // Length budget (max 24): stpike(6) + purpose(2-11) + env(2-4) = 10-21, suffix fills the rest up to 6.
@@ -75,7 +77,8 @@ param tags object
 // Storage account rule: no spaces, no hyphens, all lowercase. The name is normalised here so a
 // non-compliant name can never be produced, even if a caller passes a mixed-case or hyphenated token.
 var storageAccountNameBase = toLower(replace(replace(replace(replace('stpike${purpose}${environmentName}', ' ', ''), '-', ''), '_', ''), '.', ''))
-var storageAccountNameSuffix = take(uniqueString(resourceGroup().id, 'Microsoft.Storage/storageAccounts'), min(6, 24 - length(storageAccountNameBase)))
+var resourceGuid = guid(resourceGroup().id, 'Microsoft.Storage/storageAccounts')
+var storageAccountNameSuffix = take(uniqueString(resourceGuid), min(6, 24 - length(storageAccountNameBase)))
 var storageAccountName = '${storageAccountNameBase}${storageAccountNameSuffix}'
 
 resource storageAccount 'Microsoft.Storage/storageAccounts@2023-05-01' = {
@@ -121,4 +124,5 @@ resource containers 'Microsoft.Storage/storageAccounts/blobServices/containers@2
 
 output deployedResourceId string = storageAccount.id
 output deployedResourceName string = storageAccount.name
+output resourceGuid string = resourceGuid
 output containerNamesOut array = containerNames

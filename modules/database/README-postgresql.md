@@ -8,7 +8,7 @@ Creates an **Azure Database for PostgreSQL – Flexible Server** with **private 
 | **Azure resources** | `Microsoft.DBforPostgreSQL/flexibleServers@2023-06-01-preview`, `Microsoft.Network/virtualNetworks/subnets`, `Microsoft.Network/privateDnsZones`, `…/virtualNetworkLinks` |
 | **Deployment scope** | Resource group |
 | **`input.json` key** | `resourceTargets.postgresql` |
-| **Server name** | `psql-pike-<purpose>-<env>-<suffix>` → e.g. `psql-pike-app-dev-` + 6 characters (FQDN `<name>.postgres.database.azure.com`). `<suffix>` = first 6 characters of `uniqueString(<resource group ID>)`: unique across Azure, stable on re-runs in the same resource group. Microsoft limit: 3–63 characters, lowercase letters, digits and hyphens |
+| **Server name** | `psql-pike-<purpose>-<env>-<suffix>` → e.g. `psql-pike-app-dev-` + 6 characters (FQDN `<name>.postgres.database.azure.com`). `<suffix>` = first 6 characters of `uniqueString(resourceGuid)`, where `resourceGuid` = `guid(<resource group ID>, 'Microsoft.DBforPostgreSQL/flexibleServers')` is the globally defined GUID declared in the module: unique across Azure, stable on re-runs in the same resource group. Microsoft limit: 3–63 characters, lowercase letters, digits and hyphens |
 
 ---
 
@@ -77,6 +77,7 @@ flowchart TB
 | Output | Description |
 |---|---|
 | `deployedResourceId` / `deployedResourceName` | Server ID and name |
+| `resourceGuid` | Globally defined GUID (`guid(<resource group ID>, <resource type>)`) the name suffix is derived from |
 | `fullyQualifiedDomainName` | Server FQDN (resolves privately inside the VNet) |
 | `delegatedSubnetId` | ID of `snet-<purpose>-psql` |
 | `privateDnsZoneId` | ID of the private DNS zone |

@@ -121,7 +121,7 @@ Name: `agw-pike-dev`; public IP: `pip-agw-pike-dev`. The gateway goes in subnet 
 | `APP_GATEWAY_ROUTING_RULES` | `[{"name":"rule-public-http","priority":100,"listenerName":"listener-public-http","backendPoolName":"backend-pool-001","httpSettingName":"http-settings-80"},{"name":"rule-private-http","priority":101,"listenerName":"listener-private-http","backendPoolName":"backend-pool-001","httpSettingName":"http-settings-80"}]` |
 
 ### Key Vault — `keyVault`
-Name: `kvpike<target.purpose>dev<suffix>`: all lowercase, no hyphens, globally unique through a 6-character suffix from `uniqueString(<resource group ID>)`, 24 characters at most. See [modules/security/README.md](../modules/security/README.md#naming-rules).
+Name: `kvpike<target.purpose>dev<suffix>`: all lowercase, no hyphens, globally unique through a 6-character suffix from `uniqueString(resourceGuid)` (`resourceGuid` = `guid(<resource group ID>, <resource type>)`, declared in the module), 24 characters at most. See [modules/security/README.md](../modules/security/README.md#naming-rules).
 
 | Variable | `dev` value |
 |---|---|
@@ -133,7 +133,7 @@ Name: `kvpike<target.purpose>dev<suffix>`: all lowercase, no hyphens, globally u
 | `KEY_VAULT_PUBLIC_NETWORK_ACCESS` | `Enabled` |
 
 ### Storage Account — `storageAccount`
-Name: `stpike<target.purpose>dev<suffix>`. Storage account names have **no spaces, no hyphens, and are all lowercase** (3–24 characters, unique across Azure): this is why `target.purpose` must be lowercase letters or digits only. The 6-character suffix from `uniqueString(<resource group ID>)` keeps the name unique. See [modules/storage/README.md](../modules/storage/README.md#naming-rules).
+Name: `stpike<target.purpose>dev<suffix>`. Storage account names have **no spaces, no hyphens, and are all lowercase** (3–24 characters, unique across Azure): this is why `target.purpose` must be lowercase letters or digits only. The 6-character suffix from `uniqueString(resourceGuid)` (`resourceGuid` = `guid(<resource group ID>, <resource type>)`, declared in the module) keeps the name unique. See [modules/storage/README.md](../modules/storage/README.md#naming-rules).
 
 | Variable | `dev` value |
 |---|---|
@@ -164,7 +164,7 @@ Server name: `sql-<target.workload>-dev`; database name: `<target.purpose>`.
 | `AZURE_SQL_MIN_TLS_VERSION` | `1.2` |
 
 ### Azure OpenAI — `openAi`
-Name and custom subdomain: `oaipike<target.purpose>dev<suffix>`: all lowercase, no hyphens, globally unique through a 6-character suffix from `uniqueString(<resource group ID>)`. See [modules/ai/README.md](../modules/ai/README.md#naming-rules).
+Name and custom subdomain: `oaipike<target.purpose>dev<suffix>`: all lowercase, no hyphens, globally unique through a 6-character suffix from `uniqueString(resourceGuid)` (`resourceGuid` = `guid(<resource group ID>, <resource type>)`, declared in the module). See [modules/ai/README.md](../modules/ai/README.md#naming-rules).
 
 | Variable | `dev` value |
 |---|---|
@@ -198,7 +198,7 @@ Per VM type:
 Every resource now gets the same tags (`RESOURCE_TAGS` plus `env` and `workload`).
 
 ### PostgreSQL Flexible Server — `postgresql`
-Server name: `psql-pike-<target.purpose>-dev-<suffix>`: globally unique through a 6-character suffix from `uniqueString(<resource group ID>)`. The module also creates its own delegated subnet `snet-<target.purpose>-psql` and the private DNS link `link-vnet-pike-dev`.
+Server name: `psql-pike-<target.purpose>-dev-<suffix>`: globally unique through a 6-character suffix from `uniqueString(resourceGuid)` (`resourceGuid` = `guid(<resource group ID>, <resource type>)`, declared in the module). The module also creates its own delegated subnet `snet-<target.purpose>-psql` and the private DNS link `link-vnet-pike-dev`.
 
 | Variable | `dev` value |
 |---|---|

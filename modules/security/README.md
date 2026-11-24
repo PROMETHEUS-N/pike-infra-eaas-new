@@ -47,7 +47,7 @@ flowchart LR
 | Characters | Alphanumerics and hyphens · start with a letter · end with a letter or digit · no consecutive hyphens | ✅ starts with `k`, letters/digits only |
 | Pike convention | All **lowercase**, **no spaces**, **no hyphens** | ✅ |
 
-The name is `kvpike` + `purpose` + `env` + a suffix, where `<suffix>` = first characters of `uniqueString(<resource group ID>)`:
+The name is `kvpike` + `purpose` + `env` + a suffix, where `<suffix>` = first characters of `uniqueString(resourceGuid)`, where `resourceGuid` = `guid(<resource group ID>, 'Microsoft.KeyVault/vaults')` is the globally defined GUID declared in the module:
 
 | Part | Length |
 |---|---|
@@ -86,6 +86,7 @@ The exact name is printed in the run summary and in the inventory CSV (`deployed
 |---|---|
 | `deployedResourceId` | Vault resource ID |
 | `deployedResourceName` | `kvpike<purpose><env><suffix>` |
+| `resourceGuid` | Globally defined GUID (`guid(<resource group ID>, <resource type>)`) the name suffix is derived from |
 
 ---
 

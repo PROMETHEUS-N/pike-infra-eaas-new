@@ -26,7 +26,8 @@ The workflows never write out a full name. They pass only the token values, whic
 - **Region code:** goes before `<env>` only if the deployment is multi-region. This is *not used*, because the deployment is single-region.
 - **Globally unique names** include `pike`. **Key Vault, storage account, Azure OpenAI, PostgreSQL and Azure SQL server** also get a **unique suffix**, so they can never collide with a name already used anywhere in Azure:
   - pattern `<prefix>pike<purpose><env><suffix>`: all **lowercase**, **no spaces**, **no hyphens** (PostgreSQL and SQL server keep the hyphenated pattern, which they allow: `psql-pike-<purpose>-<env>-<suffix>`, `sql-<workload>-<env>-<suffix>`);
-  - `<suffix>` = the first characters of `uniqueString(<resource group ID>)` (6 characters, shortened only when needed to stay within 24, never fewer than 3);
+  - `resourceGuid` = `guid(<resource group ID>, <resource type>)`: the globally defined GUID of the resource, declared inside the Key Vault, storage account, Azure OpenAI and PostgreSQL modules (not in the workflow) and returned as their `resourceGuid` output;
+  - `<suffix>` = the first characters of `uniqueString(resourceGuid)` (Azure SQL server: `uniqueString(<resource group ID>, <resource type>)`) (6 characters, shortened only when needed to stay within 24, never fewer than 3);
   - the suffix is **deterministic**: re-running in the same resource group gives the same name, so the resource is updated, not duplicated. Another subscription or resource group gets a different name.
 - **Length limits:** every name is checked against the Microsoft limit in [section 2](#2-names-built-by-the-existing-modules).
 - **Required tags:** `env`, `workload`, `owner`, `cost-center`, `data-class`. Every module adds `env` and `workload`. The other three come from the `RESOURCE_TAGS` variable, and the run fails if any of them is missing.

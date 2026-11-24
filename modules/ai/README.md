@@ -49,7 +49,7 @@ flowchart LR
 | Custom subdomain (`customSubDomainName`) | **Unique across Azure** (it is the endpoint host name) · **2–64** characters · alphanumerics and hyphens · cannot end with a hyphen · **cannot be changed after creation** | ✅ same value as the account name |
 | Pike convention | All **lowercase**, **no spaces**, **no hyphens** | ✅ |
 
-The name is `oaipike` + `purpose` + `env` + a **6-character suffix**, where `<suffix>` = first characters of `uniqueString(<resource group ID>)`:
+The name is `oaipike` + `purpose` + `env` + a **6-character suffix**, where `<suffix>` = first characters of `uniqueString(resourceGuid)`, where `resourceGuid` = `guid(<resource group ID>, 'Microsoft.CognitiveServices/accounts')` is the globally defined GUID declared in the module:
 
 - **Unique:** the suffix is different for every subscription and resource group, so two environments or two clients can never ask for the same subdomain.
 - **Stable:** the suffix is deterministic. Re-running the workflow in the same resource group produces the same name, so the existing account is updated and no duplicate is created.
@@ -75,6 +75,7 @@ The exact name is printed in the run summary and in the inventory CSV (`deployed
 |---|---|
 | `deployedResourceId` | Account resource ID |
 | `deployedResourceName` | `oaipike<purpose><env><suffix>` |
+| `resourceGuid` | Globally defined GUID (`guid(<resource group ID>, <resource type>)`) the name suffix is derived from |
 | `endpoint` | The account endpoint URL |
 
 ---

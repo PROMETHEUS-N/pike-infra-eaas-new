@@ -6,8 +6,10 @@
 // Microsoft rule (server name): globally unique (it is the FQDN <name>.postgres.database.azure.com),
 // 3-63 characters, lowercase letters, digits and hyphens, cannot start or end with a hyphen.
 //
-// Uniqueness: <suffix> = uniqueString(resource group ID), 6 characters. It is deterministic, so a re-run
-// in the same resource group gets the same name (idempotent), while another subscription / resource
+// Globally defined GUID: resourceGuid = guid(resource group ID, resource type), declared here in the
+// module (not in the workflow). The resource group ID already contains the subscription ID, so the GUID
+// is unique across Azure. <suffix> = uniqueString(resourceGuid), so the name is derived from that GUID.
+// It is deterministic, so a re-run in the same resource group gets the same name (idempotent), while another subscription / resource
 // group gets a different one.
 // Length: psql-pike-(10) + purpose(2-11) + -(1) + env(2-4) + -(1) + suffix(6) = 22-33 characters.
 
@@ -87,7 +89,8 @@ param privateDnsZoneName string
 @description('Tags. Must contain owner, cost-center and data-class; env and workload are added here.')
 param tags object
 
-var serverName = toLower('psql-pike-${purpose}-${environmentName}-${take(uniqueString(resourceGroup().id, 'Microsoft.DBforPostgreSQL/flexibleServers'), 6)}')
+var resourceGuid = guid(resourceGroup().id, 'Microsoft.DBforPostgreSQL/flexibleServers')
+var serverName = toLower('psql-pike-${purpose}-${environmentName}-${take(uniqueString(resourceGuid), 6)}')
 var vnetName = 'vnet-pike-${environmentName}'
 var subnetName = 'snet-${purpose}-psql'
 var privateDnsZoneLinkName = 'link-${vnetName}'
@@ -163,6 +166,7 @@ resource postgresqlServer 'Microsoft.DBforPostgreSQL/flexibleServers@2023-06-01-
 
 output deployedResourceId string = postgresqlServer.id
 output deployedResourceName string = postgresqlServer.name
+output resourceGuid string = resourceGuid
 output fullyQualifiedDomainName string = postgresqlServer.properties.fullyQualifiedDomainName
 output delegatedSubnetId string = postgresqlSubnet.id
 output privateDnsZoneId string = privateDnsZone.id

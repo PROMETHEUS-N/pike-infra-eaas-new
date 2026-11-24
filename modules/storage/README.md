@@ -45,7 +45,7 @@ flowchart LR
 | Length | **3–24** characters | ✅ always 13–24 |
 | Characters | **Lowercase letters and numbers only**: no spaces, no hyphens, no underscores, no periods | ✅ |
 
-The name is `stpike` + `purpose` + `env` + a suffix, where `<suffix>` = first characters of `uniqueString(<resource group ID>)`:
+The name is `stpike` + `purpose` + `env` + a suffix, where `<suffix>` = first characters of `uniqueString(resourceGuid)`, where `resourceGuid` = `guid(<resource group ID>, 'Microsoft.Storage/storageAccounts')` is the globally defined GUID declared in the module:
 
 | Part | Length |
 |---|---|
@@ -86,6 +86,7 @@ The exact name is printed in the run summary and in the inventory CSV (`deployed
 |---|---|
 | `deployedResourceId` | Storage account resource ID |
 | `deployedResourceName` | Final account name |
+| `resourceGuid` | Globally defined GUID (`guid(<resource group ID>, <resource type>)`) the name suffix is derived from |
 | `containerNamesOut` | The containers that were created |
 
 ---
